@@ -1,0 +1,235 @@
+---
+title: "Margo Killey"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(ISLR)
+data(Carseats)
+library("FNN")
+
+```
+
+Below, I am separating my Carseats data into a training set and a testing set. 
+```{r}
+#Setting the size of the training set 
+train_size <- floor(nrow(ISLR::Carseats) * 0.8)
+train_size
+
+#Taking the first 320 rows to be my training set
+trainCarseats <- ISLR::Carseats[1:320, ]
+
+#Taking the last 80 rows to be my testing set. 
+testCarseats <- ISLR::Carseats[321:400, ]
+
+```
+
+Now am beginning problem 3.
+3.a) 
+```{r}
+model1 <- lm(Sales ~ CompPrice + Income + Advertising + Population + Price 
+             + ShelveLoc + Age + Education + Urban + US, data = trainCarseats)
+
+model2 <- lm(Sales ~ CompPrice + Income + Advertising + Price + ShelveLoc + Age,
+             data = trainCarseats)
+```
+Below are my training and testing errors for my linear model 1. We can see that 
+the training error is 0.9353, and the testing error is 1.3245. 
+```{r}
+trainingpred_model1 <- predict.lm(model1, trainCarseats)
+trainingpred_MSEmodel1 <- mean((trainingpred_model1 - trainCarseats$Sales)^2)
+
+testingpred_model1 <- predict.lm(model1, testCarseats)
+testingpred_MSEmodel1 <- mean((testingpred_model1 - testCarseats$Sales)^2)
+
+trainingpred_MSEmodel1
+testingpred_MSEmodel1
+```
+Below are my trainig and testing errors for my linear model 2. We can see that the training error 
+is 0.9563, and the testing error is 1.2793. 
+```{r}
+trainingpred_model2 <- predict.lm(model2, trainCarseats)
+trainingpred_MSEmodel2 <- mean((trainingpred_model2 - trainCarseats$Sales)^2)
+
+testingpred_model2 <- predict.lm(model2, testCarseats)
+testingpred_MSEmodel2 <- mean((testingpred_model2 - testCarseats$Sales)^2)
+
+trainingpred_MSEmodel2
+testingpred_MSEmodel2
+```
+For both testing and training errors from model 1 are very similar to the testing and training
+errors from model 2. The training error in model 1 is slightly smaller, while the testing error from model 2 is slightly smaller. This makes sense, because model 1 is
+more complex than model 2, so it should have a lower training
+error and a higher testing MSE. 
+
+3.b) Using KNN regression to predict Sales from CompPrice, Income, Advertising, 
+ Price, and Age. 
+ Before computing anything, I know that the training error will be lower when K = 1.
+ This is because when K = 1, that's when the model is the most flexible. When K = 1, 
+ the model just returns the nearest y to the training case. So, when using K = 1 on 
+ the training data, the training error will be 0 because it will just return the y
+ that corresponds to the training case, and not actually learning the overall
+ distribution. For the testing data, we won't be able to know which is going to have
+ lower or higher test MSE because we don't know the data. However, I can guess that
+ K = 20 will have lower testing MSE because it is better finding the distribution 
+ of the data so will better estimate a blind testing set. 
+ 
+3.c) Yes I do need to standardize the variables in the Carseat dataset. As you can see below, all of these 
+ have very different ranges : so the distance function will put a lot more weight on price than it would 
+ advertising, for example because the range of price is much larger than advertising, and price has much larger numbers included in its data. Because of this, we need to standardize our variables. 
+ Going to standardize my data below. 
+
+```{r}
+range(Carseats$CompPrice)
+range(Carseats$Income)
+range(Carseats$Advertising)
+range(Carseats$Price)
+range(Carseats$Age)
+
+set.seed(233)
+```
+
+Getting the mean and standard deviation for the training data. 
+```{r}
+mean_train = colMeans(trainCarseats[c(2, 3, 4, 6, 8)])
+std_train = sqrt( diag (var(trainCarseats[c(2, 3, 4, 6, 8)])))
+```
+Scaling training data: 
+```{r}
+X_trainCarseats = scale(trainCarseats[c(2, 3, 4, 6, 8)], center = mean_train,
+                        scale = std_train)
+y_trainCarseats = trainCarseats$Sales
+```
+Scaling training data: 
+```{r}
+X_testCarseats = scale(testCarseats[c(2, 3, 4, 6, 8)], center = mean_train, 
+                       scale = std_train)
+y_testCarseats = testCarseats$Sales
+
+```
+
+3.d) Fitting a KNN model to predict sales from CompPrice, Income, Advertising, Price, and Age. 
+```{r}
+
+k_range = c(1, 3:80)
+trainMSE = c() 
+
+for(i in 1:length(k_range)) {
+  knnTrain <- knn.reg(train = X_trainCarseats, y = y_trainCarseats,
+                      test = X_trainCarseats, 
+                      k = k_range[i])
+  
+  trainMSE[i] <- mean((y_trainCarseats - knnTrain$pred)^2)
+}
+
+testMSE = c()
+
+for(i in 1:length(k_range)) {
+  knnTest <- knn.reg(train = X_trainCarseats, y = y_trainCarseats, 
+                     test = X_testCarseats, k = k_range[i])
+  
+  testMSE[i] <- mean((y_testCarseats - knnTest$pred)^2)
+}
+```
+Now am plotting training and test errors as a function of k with the training and testing error from 
+running a linear model predicting sales from CompPrice, Income, Advertising, Price, and Age. 
+```{r}
+plot(x = I(1/k_range), y = trainMSE, type = "b", lwd = 2, col = "blue", 
+     main = "Training and Test MSE for KNN", xlab = "1/K", ylab = "MSE", ylim = (c(0, 10)))
+
+lines(x = I(1/k_range), y = testMSE, type = "b", lwd = 2, col = "red")
+
+fit_OLS = lm(Sales ~ CompPrice + Income + Advertising + Price + Age,
+             data = trainCarseats)
+train_predict = predict.lm(fit_OLS, trainCarseats)
+train_mse_OLS = mean((train_predict - trainCarseats$Sales)^2)
+
+
+test_predict = predict.lm(fit_OLS, testCarseats)
+test_mse_OLS = mean((test_predict - testCarseats$Sales)^2)
+
+abline(a = train_mse_OLS, b = 0, lty = 3, col = "blue")
+abline(a = test_mse_OLS, b = 0, lty = 2, col = "red")
+
+legend("topright", legend = c("Training KNN", "Test KNN", "Training OLS", "Test OLS"), cex = 0.75,
+col = c("blue", "red", "blue"," red"), lwd = c(2, 2, 1, 1),
+pch = c(1, 1, NA, NA), lty = c(1, 1, 3, 2))
+
+which.min(testMSE)
+k_range[37]
+
+min(testMSE)
+```
+k = 38 is the value for which we get the lowest testMSE, and the lowest testMSE is 5.434. 
+In the plot above, you can see that the training error is lowest at 1, because it = 0 like we predicted that it would. 
+For the testing data, the highest testing error is at K = 1, also like we predicted earlier and is obviously lower at
+k = 20, which is x = 0.05 on the graph above. It also looks that the testing error and training error move in opposite 
+directions after the test MSE reaches its lowest at K = 38 (x = ~0.0263), which makes sense because after the testing
+error reaches its low, it then begins to increase again for the rest of the time. 
+
+Going to more closely look at the values close to 38
+
+```{r}
+k_range2 = c(30:50)
+trainMSE2 = c() 
+
+for(i in 1:length(k_range2)) {
+  knnTrain2 <- knn.reg(train = X_trainCarseats, y = y_trainCarseats,
+                      test = X_trainCarseats, 
+                      k = k_range2[i])
+  
+  trainMSE2[i] <- mean((y_trainCarseats - knnTrain2$pred)^2)
+}
+
+testMSE2 = c()
+
+for(i in 1:length(k_range2)) {
+  knnTest2 <- knn.reg(train = X_trainCarseats, y = y_trainCarseats, 
+                     test = X_testCarseats, k = k_range2[i])
+  
+  testMSE2[i] <- mean((y_testCarseats - knnTest2$pred)^2)
+}
+```
+Now plotting these training and testing errors again with my new MSE numbers. 
+
+```{r}
+plot(x = I(1/k_range2), y = trainMSE2, type = "b", lwd = 2, col = "blue", 
+     main = "Training and Test MSE for KNN", xlab = "1/K", ylab = "MSE", ylim = (c(3, 6)))
+
+lines(x = I(1/k_range2), y = testMSE2, type = "b", lwd = 2, col = "red")
+
+abline(a = train_mse_OLS, b = 0, lty = 3, col = "blue")
+abline(a = test_mse_OLS, b = 0, lty = 2, col = "red")
+
+legend("topright", legend = c("Training KNN", "Test KNN", "Training OLS", "Test OLS"), cex = 0.75,
+col = c("blue", "red", "blue"," red"), lwd = c(2, 2, 1, 1),
+pch = c(1, 1, NA, NA), lty = c(1, 1, 3, 2))
+```
+
+3.e) Going to plot my residuals against my fitted values for both model 2 and KNN regression of 
+K = 38 for the test data. I am using K = 38 because that's the K that minimizes the test MSE. 
+```{r}
+
+resid_model2 <- y_testCarseats - testingpred_model2
+
+plot(x = testingpred_model2, y = resid_model2, xlim = c(2, 16), ylim = c(-4, 14))
+
+knn_Test_38 <- knn.reg(train = X_trainCarseats, y = y_trainCarseats, 
+                       test = X_testCarseats, k = 38)
+resid_KNNtest_38 <- y_testCarseats - knn_Test_38$pred
+
+plot(x = knnTest$pred, y = resid_KNNtest_38, xlim = c(2, 16), ylim = c(-4, 14))
+
+```
+
+Something interesting I see when I look at these two plots, is that for the 
+linear model, the predictions are very spread out between 3 and 16, with the 
+residuals being clustered between -2 and 2. 
+For the KNN model with K = 38, I see that the predictions are clustered between 
+5 and 10, while the residuals are much more spread out between -4 and about 9.
+So it's interesting to see that the two graphs are basically opposites of each
+other. 
+
